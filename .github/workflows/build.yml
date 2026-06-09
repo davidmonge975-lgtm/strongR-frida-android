@@ -37,26 +37,26 @@ jobs:
           git config --global user.email "davidmonge975@github.com"
           git config --global user.name "davidmonge975"
           
-          # 1. APLY PATCH GIT (0001, 0003, 0004, 0005, 0006, 0007, 0008)
+          # 1. APLICAR LOS PARCHES COMPATIBLES VÍA GIT (0001, 0003, 0004, 0005, 0006, 0007, 0008)
           if [ -d "Patchs/strongR-frida/frida-core" ]; then
             echo "Aplicando parches automáticos de Git..."
             cd frida/subprojects/frida-core
             for patch in ../../../Patchs/strongR-frida/frida-core/*.patch; do
-              echo "Aplicando: \$(basename \"\$patch\")"
-              git am --keep-cr --3way "\$patch" || exit 1
+              echo "Aplicando: $(basename "$patch")"
+              git am --keep-cr --3way "$patch" || exit 1
             done
             cd ../../..
           else
             echo "⚠️ ADVERTENCIA: No se encontró la carpeta de parches."
           fi
 
-          # 2. MANUAL 0002 (UUID for re.frida.server)
+          # 2. INYECCIÓN MANUAL DEL PARCHE 0002 (UUID Aleatorio para re.frida.server)
           python3 -c "
           file_path = 'frida/subprojects/frida-core/server/server.vala'
           with open(file_path, 'r') as f:
               code = f.read()
           
-         
+          # Adaptación elástica para Frida 16.7.14
           if 'private const string DEFAULT_DIRECTORY = \"re.frida.server\";' in code:
               code = code.replace('private const string DEFAULT_DIRECTORY = \"re.frida.server\";', 'private static string DEFAULT_DIRECTORY = null;')
               
@@ -66,12 +66,12 @@ jobs:
               
               with open(file_path, 'w') as f:
                   f.write(code)
-              print('Inyected manually UUID in server.vala')
+              print('✅ Inyección manual de UUID completada con éxito en server.vala')
           else:
-              print('⚠️ Not found original line from DEFAULT_DIRECTORY. Managed different?.')
+              print('⚠️ Alerta: No se encontró la línea original de DEFAULT_DIRECTORY. Es posible que esta versión ya maneje el directorio de otra forma.')
           "
 
-          # 3. arm64
+          # 3. COMPILACIÓN EXCLUSIVA PARA TU PROCESADOR (ARM64)
           cd frida
           make server-android-arm64
           make inject-android-arm64
