@@ -15,6 +15,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential tree ninja-build gcc-multilib g++-multilib lib32stdc++-9-dev flex bison xz-utils ruby ruby-dev python3-requests python3-setuptools python3-dev python3-pip libc6-dev libc6-dev-i386
+          pip3 install lief
 
       - name: Configurar Node.js
         uses: actions/setup-node@v4
@@ -30,45 +31,47 @@ jobs:
         run: |
           git clone --recurse-submodules --branch 16.7.14 https://github.com/frida/frida
 
-      - name: Inyectar Parches y Compilar Frida (arm64)
+      - name: Aplicar Parches y Compilar Frida (arm64)
         run: |
+          # Configuración obligatoria para que Git aplique los parches
+          git config --global user.email "davidmonge975@github.com"
+          git config --global user.name "davidmonge975"
           
-          git config --global user.email "davidmonge975@gmail.com"
-          git config --global user.name "mrfear"
-          
-          # 1. INYECCIÓN MANUAL DEL UUID (Bypass del parche 0002)
+          # 1. APLY PATCH GIT (0001, 0003, 0004, 0005, 0006, 0007, 0008)
+          if [ -d "Patchs/strongR-frida/frida-core" ]; then
+            echo "Aplicando parches automáticos de Git..."
+            cd frida/subprojects/frida-core
+            for patch in ../../../Patchs/strongR-frida/frida-core/*.patch; do
+              echo "Aplicando: \$(basename \"\$patch\")"
+              git am --keep-cr --3way "\$patch" || exit 1
+            done
+            cd ../../..
+          else
+            echo "⚠️ ADVERTENCIA: No se encontró la carpeta de parches."
+          fi
+
+          # 2. MANUAL 0002 (UUID for re.frida.server)
           python3 -c "
           file_path = 'frida/subprojects/frida-core/server/server.vala'
           with open(file_path, 'r') as f:
               code = f.read()
           
-          
-          code = code.replace('private const string DEFAULT_DIRECTORY = \"re.frida.server\";', 'private static string DEFAULT_DIRECTORY = null;')
-          
-          
-          old_main = 'private static int main (string[] args) {'
-          new_main = 'private static int main (string[] args) {\n\t\tDEFAULT_DIRECTORY = GLib.Uuid.string_random();'
-          code = code.replace(old_main, new_main)
-          
-          with open(file_path, 'w') as f:
-              f.write(code)
-          print('Patch from UUID inyected successfuly in server.vala')
+         
+          if 'private const string DEFAULT_DIRECTORY = \"re.frida.server\";' in code:
+              code = code.replace('private const string DEFAULT_DIRECTORY = \"re.frida.server\";', 'private static string DEFAULT_DIRECTORY = null;')
+              
+              old_main = 'private static int main (string[] args) {'
+              new_main = 'private static int main (string[] args) {\n\t\tDEFAULT_DIRECTORY = GLib.Uuid.string_random();'
+              code = code.replace(old_main, new_main)
+              
+              with open(file_path, 'w') as f:
+                  f.write(code)
+              print('Inyected manually UUID in server.vala')
+          else:
+              print('⚠️ Not found original line from DEFAULT_DIRECTORY. Managed different?.')
           "
 
-          # 2. 
-          if [ -d "Patchs/strongR-frida/frida-core" ]; then
-            echo "Aplicando el resto de parches de ocultamiento..."
-            cd frida/subprojects/frida-core
-            for patch in ../../../Patchs/strongR-frida/frida-core/*.patch; do
-              echo "Aplicando: \$(basename \"\$patch\")"
-              git am --keep-cr "\$patch" || exit 1
-            done
-            cd ../../..
-          else
-            echo "WARNING: Patchs not found in it's folder."
-          fi
-
-          # 3. ARM64
+          # 3. arm64
           cd frida
           make server-android-arm64
           make inject-android-arm64
@@ -78,7 +81,7 @@ jobs:
         run: |
           mkdir -p releases_output
           
-          # Compress and move
+          # Comprimir y estructurar los archivos de salida
           cd frida/build/frida-android-arm64/bin
           gzip -9 frida-server
           gzip -9 frida-inject
